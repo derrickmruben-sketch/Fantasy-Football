@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL Fantasy Draft Trivia</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #080c14;
+            --surface: #0e1520;
+            --surface2: #151e2e;
+            --border: #1e2d42;
+            --accent: #00d4ff;
+            --accent2: #ff4d6d;
+            --text: #e2eaf6;
+            --muted: #4a6080;
+            --qb: #3b82f6;
+            --rb: #10b981;
+            --wr: #a855f7;
+            --te: #f97316;
+            --flex: #06b6d4;
+            --sflex: #ec4899;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            min-height: 100vh;
+            padding: 32px 20px;
+            background-image:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.08) 0%, transparent 60%),
+                repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(30,45,66,0.3) 40px, rgba(30,45,66,0.3) 41px),
+                repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(30,45,66,0.3) 40px, rgba(30,45,66,0.3) 41px);
+        }
+
+        h1 {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            letter-spacing: 0.06em;
+            text-align: center;
+            margin-bottom: 6px;
+            background: linear-gradient(90deg, var(--accent), #fff 50%, var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 36px;
+            font-family: 'DM Mono', monospace;
+        }
+
+        /* Score totals */
+        .scoreboard {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            max-width: 700px;
+            margin: 0 auto 40px;
+        }
+
+        .score-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .score-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(0,212,255,0.04), transparent);
+            pointer-events: none;
+        }
+
+        .score-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 6px; }
+        .score-value { font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; letter-spacing: 0.04em; color: var(--accent); line-height: 1; }
+        .score-value.leading { color: #ffd700; text-shadow: 0 0 20px rgba(255,215,0,0.4); }
+
+        /* Board */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .player-col {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .col-header {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2rem;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Player row */
+        .player-row {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 8px;
+            display: grid;
+            grid-template-columns: auto 52px 1fr 56px;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+
+        .pos-badge {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
+        }
+        .pos-QB  { background: rgba(59,130,246,0.25); color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); }
+        .pos-RB  { background: rgba(16,185,129,0.25); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.4); }
+        .pos-WR  { background: rgba(168,85,247,0.25); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.4); }
+        .pos-TE  { background: rgba(249,115,22,0.25); color: #fdba74; border: 1px solid rgba(249,115,22,0.4); }
+        .pos-FLEX  { background: rgba(6,182,212,0.25); color: #67e8f9; border: 1px solid rgba(6,182,212,0.4); }
+        .pos-SFLEX { background: rgba(236,72,153,0.25); color: #f9a8d4; border: 1px solid rgba(236,72,153,0.4); }
+
+        select.year-select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            padding: 4px 4px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: 'DM Mono', monospace;
+            width: 100%;
+            text-align: center;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a6080'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 5px center;
+            padding-right: 18px;
+        }
+        select.year-select:focus { outline: none; border-color: var(--accent); }
+        select.year-select option { background: #0d1829; color: var(--text); }
+
+        input[type="text"] {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: 'DM Sans', sans-serif;
+            width: 100%;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--accent); }
+        input[type="text"].selected { border-color: rgba(0,212,255,0.5); background: rgba(0,212,255,0.04); }
+
+        .pts-display {
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: right;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+        .pts-display.has-pts { color: #ffd700; }
+
+        /* Dropdown */
+        .search-wrap { position: relative; }
+
+        .dropdown {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #0d1829;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .dropdown.hidden { display: none; }
+
+        .dd-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.12s;
+        }
+        .dd-item:last-child { border-bottom: none; }
+        .dd-item:hover { background: rgba(0,212,255,0.1); }
+        .dd-item .dd-name { flex: 1; color: var(--text); }
+        .dd-item .dd-team { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+        .dd-item .dd-pts { font-family: 'DM Mono', monospace; font-size: 12px; color: #ffd700; font-weight: 500; }
+
+        .dd-empty { padding: 10px 12px; font-size: 12px; color: var(--muted); text-align: center; }
+
+        /* Loading state */
+        .loading-bar {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+            z-index: 99999;
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.3s ease;
+        }
+        .loading-bar.active { transform: scaleX(0.9); }
+        .loading-bar.done { transform: scaleX(1); opacity: 0; transition: transform 0.2s ease, opacity 0.3s ease 0.2s; }
+
+        /* Scrollbar */
+        .dropdown::-webkit-scrollbar { width: 4px; }
+        .dropdown::-webkit-scrollbar-track { background: transparent; }
+        .dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        @media (max-width: 900px) {
+            .board { grid-template-columns: 1fr; }
+            .scoreboard { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-bar" id="loadingBar"></div>
+
+    <h1>🏈 NFL Fantasy Trivia</h1>
+    <p class="subtitle">2000 – 2024 &nbsp;·&nbsp; Draft Your Best Lineup &nbsp;·&nbsp; PPR Scoring</p>
+
+    <div class="scoreboard">
+        <div class="score-card">
+            <div class="score-label">Player 1</div>
+            <div class="score-value" id="total1">0.00</div>
+        </div>
+        <div class="score-card">
+            <div class="score-label">Player 2</div>
+            <div class="score-value" id="total2">0.00</div>
+        </div>
+        <div class="score-card">
+            <div class="score-label">Player 3</div>
+            <div class="score-value" id="total3">0.00</div>
+        </div>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <script>
+    // ─── Config ────────────────────────────────────────────────────────────────
+    const POSITIONS = [
+        { id: 'QB',    label: 'QB',    posClass: 'pos-QB',    filter: ['QB'] },
+        { id: 'RB1',   label: 'RB',    posClass: 'pos-RB',    filter: ['RB'] },
+        { id: 'RB2',   label: 'RB',    posClass: 'pos-RB',    filter: ['RB'] },
+        { id: 'WR1',   label: 'WR',    posClass: 'pos-WR',    filter: ['WR'] },
+        { id: 'WR2',   label: 'WR',    posClass: 'pos-WR',    filter: ['WR'] },
+        { id: 'TE',    label: 'TE',    posClass: 'pos-TE',    filter: ['TE'] },
+        { id: 'FLEX',  label: 'FLEX',  posClass: 'pos-FLEX',  filter: ['RB', 'WR', 'TE'] },
+        { id: 'SFLEX', label: 'SFLEX', posClass: 'pos-SFLEX', filter: ['QB', 'RB', 'WR', 'TE'] },
+    ];
+
+    // ─── State ─────────────────────────────────────────────────────────────────
+    let allData = [];         // full CSV loaded once
+    let dataLoaded = false;
+    let gameState = { 1: {}, 2: {}, 3: {} };
+
+    // ─── Load CSV once ─────────────────────────────────────────────────────────
+    function loadData() {
+        const bar = document.getElementById('loadingBar');
+        bar.classList.add('active');
+
+        Papa.parse('player_stats_all.csv', {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                allData = results.data.map(r => ({
+                    name:    r.player_display_name?.trim() || '',
+                    pos:     r.position?.trim() || '',
+                    season:  parseInt(r.season, 10),
+                    team:    r.recent_team?.trim() || '',
+                    pts:     parseFloat(r.fantasy_points_ppr) || 0,
+                })).filter(r => r.name && r.pos && !isNaN(r.season));
+
+                dataLoaded = true;
+                bar.classList.remove('active');
+                bar.classList.add('done');
+            },
+            error: () => {
+                bar.classList.remove('active');
+                console.error('Failed to load player_stats_all.csv — make sure it\'s in the same folder.');
+            }
+        });
+    }
+
+    // ─── Build year options ────────────────────────────────────────────────────
+    function buildYearOptions(selectedYear = 2023) {
+        let opts = '';
+        for (let y = 2024; y >= 2000; y--) {
+            opts += `<option value="${y}" ${y === selectedYear ? 'selected' : ''}>${y}</option>`;
+        }
+        return opts;
+    }
+
+    // ─── Build UI ──────────────────────────────────────────────────────────────
+    function buildBoard() {
+        const board = document.getElementById('board');
+        for (let p = 1; p <= 3; p++) {
+            const col = document.createElement('div');
+            col.className = 'player-col';
+            col.innerHTML = `<div class="col-header">Player ${p}</div>`;
+
+            POSITIONS.forEach(pos => {
+                const row = document.createElement('div');
+                row.className = 'player-row';
+                row.id = `row-${p}-${pos.id}`;
+                row.innerHTML = `
+                    <span class="pos-badge ${pos.posClass}">${pos.label}</span>
+                    <select class="year-select" id="year-${p}-${pos.id}"
+                            onchange="clearSlot(${p},'${pos.id}')">
+                        ${buildYearOptions(2023)}
+                    </select>
+                    <div class="search-wrap">
+                        <input type="text" id="search-${p}-${pos.id}"
+                               placeholder="Search player…"
+                               oninput="handleSearch(${p},'${pos.id}')"
+                               autocomplete="off">
+                        <div class="dropdown hidden" id="drop-${p}-${pos.id}"></div>
+                    </div>
+                    <div class="pts-display" id="pts-${p}-${pos.id}">—</div>
+                `;
+                col.appendChild(row);
+            });
+
+            board.appendChild(col);
+        }
+    }
+
+    // ─── Search ────────────────────────────────────────────────────────────────
+    function handleSearch(p, posId) {
+        if (!dataLoaded) return;
+
+        const yearEl   = document.getElementById(`year-${p}-${posId}`);
+        const searchEl = document.getElementById(`search-${p}-${posId}`);
+        const drop     = document.getElementById(`drop-${p}-${posId}`);
+        const query    = searchEl.value.trim().toLowerCase();
+        const year     = parseInt(yearEl.value, 10);
+        const posConf  = POSITIONS.find(x => x.id === posId);
+
+        if (query.length < 1) { drop.classList.add('hidden'); return; }
+        if (!year || isNaN(year)) { drop.classList.add('hidden'); return; }
+
+        // Filter: match season, allowed positions, name starts with query
+        const matches = allData.filter(r =>
+            r.season === year &&
+            posConf.filter.includes(r.pos) &&
+            r.name.toLowerCase().startsWith(query)
+        ).sort((a, b) => b.pts - a.pts).slice(0, 10);
+
+        if (matches.length === 0) {
+            drop.innerHTML = `<div class="dd-empty">No players found</div>`;
+            drop.classList.remove('hidden');
+            return;
+        }
+
+        drop.innerHTML = matches.map((m, i) => {
+            // Use data-index to avoid apostrophe issues in onclick strings
+            return `<div class="dd-item" data-p="${p}" data-posid="${posId}" data-idx="${i}">
+                <span class="dd-name">${escHtml(m.name)}</span>
+                <span class="dd-team">${escHtml(m.team)}</span>
+                <span class="dd-pts">${m.pts.toFixed(1)}</span>
+            </div>`;
+        }).join('');
+
+        // Attach click events using stored match data
+        drop.querySelectorAll('.dd-item').forEach((el, i) => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectPlayer(p, posId, matches[i]);
+            });
+        });
+
+        drop.classList.remove('hidden');
+    }
+
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    // ─── Select ────────────────────────────────────────────────────────────────
+    function selectPlayer(p, posId, player) {
+        const searchEl = document.getElementById(`search-${p}-${posId}`);
+        const ptsEl    = document.getElementById(`pts-${p}-${posId}`);
+        const drop     = document.getElementById(`drop-${p}-${posId}`);
+
+        searchEl.value = player.name;
+        searchEl.classList.add('selected');
+
+        ptsEl.textContent = player.pts.toFixed(1);
+        ptsEl.classList.add('has-pts');
+
+        drop.classList.add('hidden');
+
+        gameState[p][posId] = player.pts;
+        updateTotals();
+    }
+
+    function clearSlot(p, posId) {
+        const searchEl = document.getElementById(`search-${p}-${posId}`);
+        const ptsEl    = document.getElementById(`pts-${p}-${posId}`);
+        searchEl.value = '';
+        searchEl.classList.remove('selected');
+        ptsEl.textContent = '—';
+        ptsEl.classList.remove('has-pts');
+        delete gameState[p][posId];
+        document.getElementById(`drop-${p}-${posId}`).classList.add('hidden');
+        updateTotals();
+    }
+
+    // ─── Totals ────────────────────────────────────────────────────────────────
+    function updateTotals() {
+        const totals = [1, 2, 3].map(p =>
+            Object.values(gameState[p]).reduce((sum, v) => sum + v, 0)
+        );
+        const maxVal = Math.max(...totals);
+
+        [1, 2, 3].forEach((p, i) => {
+            const el = document.getElementById(`total${p}`);
+            el.textContent = totals[i].toFixed(2);
+            el.classList.toggle('leading', totals[i] === maxVal && maxVal > 0);
+        });
+    }
+
+    // ─── Close dropdowns on outside click ─────────────────────────────────────
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-wrap')) {
+            document.querySelectorAll('.dropdown').forEach(d => d.classList.add('hidden'));
+        }
+    });
+
+    // ─── Init ──────────────────────────────────────────────────────────────────
+    buildBoard();
+    loadData();
+    </script>
+</body>
+</html>
